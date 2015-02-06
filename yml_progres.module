@@ -1,0 +1,136 @@
+<?php
+
+/**
+ * @file
+ * YML primary module file.
+ */
+
+include_once 'yml_progres.class.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function yml_progres_menu() {
+  $items = array();
+  $items['yml-progres/%/export_to_yml.xml'] = array(
+    'title' => 'Export products to YML',
+    'page callback' => 'yml_progres_get_xml',
+	'page arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+  $items['admin/config/yml_progres'] = array(
+    'title' => 'Yml export progres (prom.ua, Yandex.market)',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('yml_progres_admin_settings'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+  );
+  return $items;
+}
+
+/**
+ * Callback for YML view page.
+ */
+function yml_progres_get_xml($type = 'promua') {
+switch ($type) {
+    case 'promua':
+          $cache_id = 'yml_progres_promua_full';
+          $cache = cache_get($cache_id);
+          if (!empty($cache->data)) {
+              header('Content-type: application/xhtml+xml; charset=utf-8');
+              echo $cache->data;
+          }  else {
+              $store = new YmlProgresUbercartStore();
+              $store->getXML();
+          }
+      break;
+    case 'yandex':
+          $cache_id = 'yml_progres_yandex';
+          $cache = cache_get($cache_id);
+          if (!empty($cache->data)) {
+              header('Content-type: application/xhtml+xml; charset=utf-8');
+              echo $cache->data;
+          }  else {
+              $store = new YmlProgresYandexUbercartStore();
+              $store->getXML();
+          }
+      break;
+    default:
+	  echo "type - $type";
+      break;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function yml_progres_theme() {
+  $type_export = array('prom', 'yandex');
+  $return_array = array();
+  foreach ($type_export as $type){
+	$return_array['yml_progres_'.$type.'_xml'] = array(
+      'variables' => array(
+        'products' => NULL,
+        'categories' => NULL,
+        'currency' => 'UAH',
+        'name' => variable_get('site_name', 'Drupal'),
+        'company' => variable_get('site_name', 'Drupal'),
+        'url' => $GLOBALS['base_url'],
+        'date' => date('Y-m-d h:i'),
+      ),
+      'template' => 'yml_progres_'.$type.'_xml',
+    );
+	$return_array['yml_progres_'.$type.'_product'] = array(
+      'variables' => array('product' => NULL),
+      'template' => 'yml_progres_'.$type.'_product',
+      'currency' => 'UAH',	
+	);
+	$return_array['yml_progres_'.$type.'_category'] = array(
+      'variables' => array('category' => NULL),
+      'template' => 'yml_progres_'.$type.'_category',
+	);
+  }
+  return $return_array;
+}
+
+function yml_progres_admin_settings() {
+  $form = array();
+  $url = url('yml-progres/promua/export_to_yml.xml', array('absolute' => TRUE));
+  $form['generated_url_prom'] = array(
+    '#type' => 'item',
+    '#title' => t("Generated file"),
+    '#markup' => $url . ' (' . l('Prom.ua full', $url) . ')',
+    '#description' => t("Use this url in Prom.ua"),
+  );
+  $url = url('yml-progres/yandex/export_to_yml.xml', array('absolute' => TRUE));
+  $form['generated_url_yandex'] = array(
+    '#type' => 'item',
+    '#title' => t("Generated file"),
+    '#markup' => $url . ' (' . l('Yandex.market', $url) . ')',
+    '#description' => t("Use this url in Yandex.Market"),
+  );  
+
+ // $form['#submit'][] = 'yml_progres_admin_settings_submit';
+
+  return system_settings_form($form);
+}
+
+/**
+ * Processes ml_tools_admin_settings form.
+ */
+function yml_progres_admin_settings_submit($form, $form_state) {
+}
+
+function yml_progres_node_insert($node) {
+    if ($node->type == 'product'){
+        yml_progres_node_update($node);
+    }
+}
+
+function yml_progres_node_update($node) {
+    if ($node->type == 'product'){
+        cache_clear_all('yml_progres_promua_full', 'cache');
+        cache_clear_all('yml_progres_yandex', 'cache');
+    }
+}
